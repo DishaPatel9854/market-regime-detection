@@ -121,16 +121,6 @@ The regime visualization highlights key historical periods:
 
 ---
 
-# Model Comparison
-
-<p align="center">
-  <img src="outputs/model_comparison.png" width="900">
-</p>
-
-Agreement between models indicates **high-confidence regime detection**, while disagreements often occur during **transition periods**.
-
----
-
 # Project Structure
 
 ```
