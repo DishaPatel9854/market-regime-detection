@@ -183,12 +183,22 @@ notebooks/02_model_training.ipynb
 
 # Future Improvements
 
-Possible extensions include:
+Possible extensions to this project include:
 
-- Adding macroeconomic indicators (VIX, interest rates)
-- Using **Hidden Semi-Markov Models**
-- Regime-based **portfolio allocation strategies**
+- **Walk-forward training to eliminate look-ahead bias**  
+  Fit the scaler and clustering models using only the historical data available at
+  each point in time, rather than fitting on the full dataset.
 
+- **Incorporating macroeconomic indicators**  
+  Add features such as VIX, interest rates, or credit spreads to capture
+  broader market conditions.
+
+- **Hidden Semi-Markov Models (HSMM)**  
+  Extend the HMM framework to model regime duration, which may explicitly
+  better reflect the persistence of market states.
+
+- **Regime-based portfolio allocation**  
+  Use detected regimes to dynamically adjust portfolio exposure or risk levels.
 ---
 
 # Technologies Used
