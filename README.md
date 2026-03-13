@@ -8,9 +8,9 @@ This project builds an **unsupervised machine learning pipeline** to detect **ma
 
 The system identifies three primary regimes:
 
-- **Bull** — trending upward markets  
-- **Bear** — declining markets  
-- **Sideways** — range-bound or uncertain markets  
+- **Bull** - trending upward markets  
+- **Bear** - declining markets  
+- **Sideways** - range-bound or uncertain markets  
 
 Two models are implemented and compared:
 
