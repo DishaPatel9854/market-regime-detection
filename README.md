@@ -14,8 +14,8 @@ The system identifies three primary regimes:
 
 Two models are implemented and compared:
 
-- **KMeans Clustering**
-- **Gaussian Hidden Markov Model (HMM)**
+- **KMeans Clustering** (primary model)
+- **Gaussian Hidden Markov Model (HMM)** (comparison model)
 
 ---
 
@@ -25,7 +25,7 @@ Two models are implemented and compared:
 - **Source:** Yahoo Finance (`yfinance`)  
 - **Frequency:** Daily  
 - **Start Date:** 2005  
-- **Observations:** ~5200 trading days  
+- **Observations:** ~5,277 trading days (after rolling window computation)
 
 SPY is used as a proxy for the **broader U.S. equity market**, capturing major events such as:
 
@@ -48,16 +48,17 @@ Four domain-motivated features are used to characterize market behavior.
 
 All features are **standardized using StandardScaler** before clustering.
 
+> **Note on look-ahead bias:** The scaler is currently fit on the full dataset. A production system would use walk-forward fitting - noted as a future improvement.
+
 ---
 
 # Model Methodology
 
 ## KMeans Clustering
 
-KMeans is used as the **primary unsupervised model**.
+KMeans is used as the **primary model** due to cleaner 3-regime separation with a 4-feature observation space.
 
 Since cluster labels are arbitrary, regimes are assigned **post-clustering** based on **mean return ranking**:
-
 ```
 Lowest mean return  → Bear
 Middle mean return  → Sideways
@@ -68,15 +69,33 @@ Highest mean return → Bull
 
 ## Hidden Markov Model (HMM)
 
-A **Gaussian HMM** is used to capture **temporal dependence between regimes**.
+A **Gaussian HMM** captures **temporal dependence between regimes** - unlike KMeans, which treats each day independently, HMM models the probability of transitioning between states.
 
 Observation space:
-
 ```
 [log_return, rolling_volatility]
 ```
 
-This allows the model to estimate **transition probabilities between regimes**, reflecting the persistence of market states.
+HMM was implemented alongside KMeans for comparison. KMeans was selected as the primary model because its 4-feature observation space produced cleaner 3-regime separation. The HMM transition matrix revealed Bear and Sideways collapsing into a two-state cycle, likely due to the limited 2-feature input. Expanding the observation space with VIX or yield curve data is the natural next step.
+
+### Why HMM for Market Regimes?
+
+Traditional clustering (KMeans) treats each trading day as **independent** 
+it has no memory of what regime yesterday was in. This is unrealistic. 
+Bear markets don't last one day; bull runs persist for months or years.
+
+HMM addresses this by modeling **regime persistence and transitions explicitly**:
+- A state can only change based on learned transition probabilities
+- The model learns that Bull regimes are sticky (0.98 self-transition)
+- Regime changes require sustained shifts in market behavior, not just a single day's readings
+
+This makes HMM the **theoretically correct** model for financial regime detection
+markets are sequential processes, not independent daily draws.
+
+In this implementation, KMeans was selected as the primary model due to its 
+richer 4-feature observation space producing cleaner separation. With VIX and 
+yield curve features added to the HMM observation space, HMM would likely 
+become the stronger model.
 
 ---
 
@@ -106,7 +125,7 @@ The highest score occurred at **k = 3 (~0.37)**, indicating the best balance bet
 
 ---
 
-# Market Regime Detection
+# Market Regime Detection (KMeans)
 
 <p align="center">
   <img src="outputs/regime_map.png" width="900">
@@ -121,8 +140,35 @@ The regime visualization highlights key historical periods:
 
 ---
 
-# Project Structure
+# HMM Transition Matrix
 
+<p align="center">
+  <img src="outputs/hmm_transition_matrix.png" width="600">
+</p>
+
+Key observations from the transition matrix:
+
+- **Bull → Bull: 0.98** - Bull regime is highly persistent. Once the market trends upward, it strongly maintains that state.
+- **Bear → Sideways: 1.00** - Bear regime always transitions to Sideways, never directly to Bull. Consistent with real market behavior - recoveries don't happen overnight.
+- **Sideways → Bear: 0.98** - With only 2 observation features, HMM conflates Bear and Sideways into a two-state cycle. Expanding the observation space with VIX or yield curve data would improve separation.
+
+---
+
+# Model Selection: KMeans vs HMM
+
+| Criterion | KMeans | HMM |
+|---|---|---|
+| Observation features | 4 | 2 |
+| Regime separation | Clean 3-way split | Bear/Sideways collapse |
+| Temporal modeling | None | Transition probabilities |
+| Interpretability | High | Medium |
+| Primary model | ✅ | Comparison |
+
+HMM is theoretically superior for sequential financial data. In this implementation, KMeans outperformed due to a richer feature set. With macro features added, HMM would likely produce more stable separation.
+
+---
+
+# Project Structure
 ```
 market-regime-detection
 │
@@ -143,8 +189,15 @@ market-regime-detection
 │   └── scaler.pkl
 │
 ├── outputs
-│   ├── regime_results.csv
-│   └── visualization images
+│   ├── elbow_curve.png
+│   ├── silhouette_scores.png
+│   ├── regime_map.png
+│   ├── hmm_transition_matrix.png
+│   └── regime_results.csv
+│
+├── config.py
+├── requirements.txt
+└── README.md
 ```
 
 ---
@@ -152,19 +205,16 @@ market-regime-detection
 # How to Run
 
 ### Install dependencies
-
 ```
 pip install -r requirements.txt
 ```
 
 ### Train models
-
 ```
 python -m src.train
 ```
 
 ### Explore notebooks
-
 ```
 notebooks/01_eda_preprocessing.ipynb
 notebooks/02_model_training.ipynb
@@ -174,43 +224,27 @@ notebooks/02_model_training.ipynb
 
 # Key Takeaways
 
-- Market regimes can be identified using **unsupervised learning**
-- Volatility and momentum features strongly separate regimes
-- **HMM captures temporal persistence**, improving regime continuity
-- Combining clustering and probabilistic models provides **more robust regime analysis**
+- Market regimes can be identified using **unsupervised learning** on technical indicators
+- Volatility and momentum features strongly separate Bull from Bear/Sideways periods
+- **KMeans with 4 features** produced cleaner regime separation than HMM with 2 features
+- **HMM transition matrix confirms Bull persistence (0.98)** - consistent with real market dynamics
+- Both models correctly identify the 2008 GFC and 2020 COVID crash as Bear regimes
 
 ---
 
 # Future Improvements
 
-Possible extensions to this project include:
+- **Expand HMM observation space** - add VIX and yield curve features (available via yfinance) to improve Bear/Sideways separation
+- **Walk-forward training** - fit scaler and models on rolling historical windows to eliminate look-ahead bias
+- **Hidden Semi-Markov Models (HSMM)** - model regime duration explicitly
+- **Regime-based portfolio allocation** - use detected regimes to dynamically adjust exposure or risk levels
+- **Incorporate macroeconomic indicators** - credit spreads, interest rates for broader market context
 
-- **Walk-forward training to eliminate look-ahead bias**  
-  Fit the scaler and clustering models using only the historical data available at
-  each point in time, rather than fitting on the full dataset.
-
-- **Incorporating macroeconomic indicators**  
-  Add features such as VIX, interest rates, or credit spreads to capture
-  broader market conditions.
-
-- **Hidden Semi-Markov Models (HSMM)**  
-  Extend the HMM framework to model regime duration, which may explicitly
-  better reflect the persistence of market states.
-
-- **Regime-based portfolio allocation**  
-  Use detected regimes to dynamically adjust portfolio exposure or risk levels.
 ---
 
 # Technologies Used
 
-- Python
-- Scikit-Learn
-- hmmlearn
-- Pandas
-- NumPy
-- Matplotlib
-- Plotly
-- yfinance
+- Python · Scikit-Learn · hmmlearn · Pandas · NumPy · Matplotlib · Plotly · yfinance
 
 ---
 
